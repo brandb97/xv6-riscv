@@ -15,7 +15,7 @@ extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
 // TODO: Comment this out
-// #define BUDDY_SYSTEM
+#define BUDDY_SYSTEM
 
 struct run {
   struct run *next;
@@ -24,15 +24,24 @@ struct run {
 #endif
 };
 
+#ifdef BUDDY_SYSTEM
+struct page {
+  struct run lru;
+  uint64 order;
+};
+#endif
+
 struct {
   struct spinlock lock;
 #ifndef BUDDY_SYSTEM  
   struct run *freelist;
 #else
+#define MAX_ORDER (11)
   struct free_area {
-    struct run *freelist;
+    struct run *free_list;
     uint64 nr_free;
-  } free_areas[11];
+  } free_areas[MAX_ORDER];
+  uint64 free_pages;
 #endif
 } kmem;
 
@@ -129,6 +138,13 @@ kalloc()
   return allocrange(0);
 }
 
+
+static inline uint8 page_is_buddy(struct page *buddy, uint64 order)
+{
+  return 0; // 0 for false;
+}
+
+/* I may write really really awful code */
 static inline void __free_pages_bulk (struct page *page, struct page *base,
 		struct zone *zone, unsigned int order)
 {
@@ -136,29 +152,24 @@ static inline void __free_pages_bulk (struct page *page, struct page *base,
 	struct page *coalesced;
 	int order_size = 1 << order;
 
-	if (unlikely(order))
-		destroy_compound_page(page, order);
+	page_idx = (page - base) >> PGSHIFT;
 
-	page_idx = page - base;
+	// BUG_ON(page_idx & (order_size - 1));
+	// BUG_ON(bad_range(zone, page));
 
-	BUG_ON(page_idx & (order_size - 1));
-	BUG_ON(bad_range(zone, page));
-
-	zone->free_pages += order_size;
+	kmem.free_pages += order_size;
 	while (order < MAX_ORDER-1) {
 		struct free_area *area;
 		struct page *buddy;
 		int buddy_idx;
 
 		buddy_idx = (page_idx ^ (1 << order));
-		buddy = base + buddy_idx;
-		if (bad_range(zone, buddy))
-			break;
+		buddy = (struct page *)((uchar *)base + (buddy_idx << PGSHIFT));
 		if (!page_is_buddy(buddy, order))
 			break;
 		/* Move the buddy up one level. */
 		list_del(&buddy->lru);
-		area = zone->free_area + order;
+		area = kmem.free_areas + order;
 		area->nr_free--;
 		rmv_page_order(buddy);
 		page_idx &= buddy_idx;
@@ -166,8 +177,8 @@ static inline void __free_pages_bulk (struct page *page, struct page *base,
 	}
 	coalesced = base + page_idx;
 	set_page_order(coalesced, order);
-	list_add(&coalesced->lru, &zone->free_area[order].free_list);
-	zone->free_area[order].nr_free++;
+	list_add(&coalesced->lru, &kmem.free_areas[order].free_list);
+	kmem.free_areas[order].nr_free++;
 }
 
 // Free the page of physical memory pointed at by pa,
