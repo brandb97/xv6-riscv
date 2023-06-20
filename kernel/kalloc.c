@@ -15,9 +15,6 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
-// TODO: Comment this out
-#define BUDDY_SYSTEM
-
 #ifdef BUDDY_SYSTEM
 
 #define MAX_ORDER (11)
@@ -64,8 +61,9 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+
   #ifdef BUDDY_SYSTEM
-  // TODO: initialize page_desp
+  printf("buddy system enabled\n");
   uint64 i = NR_PGDESP;
   while (i-- > 0) {
     page_desp[i].order = INVALID_ORDER;
@@ -76,12 +74,12 @@ kinit()
   while (order < MAX_ORDER) {
     kmem.free_area[order].nr_free = 0;
     INIT_LIST_HEAD(&kmem.free_area[order].free_list);
+    order++;
   }
+
   #endif
   freerange(end, (void*)PHYSTOP);
 }
-
-#ifndef BUDDY_SYSTEM
 
 void
 freerange(void *pa_start, void *pa_end)
@@ -91,6 +89,8 @@ freerange(void *pa_start, void *pa_end)
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
 }
+
+#ifndef BUDDY_SYSTEM
 
 // Free the page of physical memory pointed at by pa,
 // which normally should have been returned by a
@@ -135,18 +135,6 @@ kalloc(void)
 }
 
 #else
-
-// only used in initialization
-void
-freerange(void *pa_start, void *pa_end)
-{
-  // use __free_page_bulk
-  char *p;
-  p = (char*)PGROUNDUP((uint64)pa_start);  
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
-    __free_pages_bulk(pa_to_page(p), 0);
-  }
-}
 
 // may should replace kalloc
 void *
@@ -211,6 +199,7 @@ static inline void __free_pages_bulk (struct page *page, unsigned int order)
 		area->nr_free--;
 		rmv_page_order(buddy);
 		page_idx &= buddy_idx;
+
 		order++;
 	}
 	coalesced = page_desp + page_idx;
@@ -227,6 +216,7 @@ void
 kfree(void *pa)
 {
   struct page *pgdsp;
+  uint32 order;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -236,7 +226,11 @@ kfree(void *pa)
 
   acquire(&kmem.lock);
   pgdsp = pa_to_page(pa);
-  __free_pages_bulk(pgdsp, pgdsp->order);
+  order = pgdsp->order;
+  if (order == INVALID_ORDER) {
+    order = 0;
+  }
+  __free_pages_bulk(pgdsp, order);
   release(&kmem.lock);
 }
 
