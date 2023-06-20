@@ -235,10 +235,20 @@ kfree(void *pa)
   release(&kmem.lock);
 }
 
-static inline struct page *expand(struct page *page, uint32 order, 
-  uint32 current_order, struct area *area) 
+static inline struct page *expand(struct page *page, uint32 low,
+  uint32 high, struct free_area *area) 
 {
+	unsigned long size = 1 << high;
 
+	while (high > low) {
+		area--;
+		high--;
+		size >>= 1;
+		list_add(&page[size].lru, &area->free_list);
+		area->nr_free++;
+		set_page_order(&page[size], high);
+	}
+	return page;
 }
 
 static struct page *__rmqueue(uint32 order)
