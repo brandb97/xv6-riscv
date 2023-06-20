@@ -8,6 +8,7 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "list.h"
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -17,43 +18,69 @@ extern char end[]; // first address after kernel.
 // TODO: Comment this out
 #define BUDDY_SYSTEM
 
-struct run {
-  struct run *next;
 #ifdef BUDDY_SYSTEM
-  struct run *prev;
-#endif
-};
 
-#ifdef BUDDY_SYSTEM
+#define MAX_ORDER (11)
+#define INVALID_ORDER MAX_ORDER
+#define NR_PGDESP ((PHYSTOP - KERNBASE) >> PGSHIFT)
+
+#define pa_to_page(x) (struct page *)(page_desp + ((x - KERNBASE) >> PGSHIFT))
+#define page_to_pa(x) (void *)(KERNBASE + (x - page_desp) << PGSHIFT)
+
+// Page descriptor for all pages in mem
 struct page {
-  struct run lru;
-  uint64 order;
+  struct list_head lru;
+  uint32 order;
+} page_desp[NR_PGDESP];
+
+struct free_area {
+  struct list *free_list;
+  uint64 nr_free;
 };
-#endif
 
 struct {
   struct spinlock lock;
-#ifndef BUDDY_SYSTEM  
-  struct run *freelist;
-#else
-#define MAX_ORDER (11)
-  struct free_area {
-    struct run *free_list;
-    uint64 nr_free;
-  } free_areas[MAX_ORDER];
+  struct free_area free_area[MAX_ORDER];
   uint64 free_pages;
-#endif
 } kmem;
 
+#else
 
-#ifndef BUDDY_SYSTEM
+struct run {
+  struct run *next;
+};
+
+struct {
+  struct spinlock lock;
+  struct run *freelist;
+} kmem;
+
+#endif
+
+
 
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  #ifdef BUDDY_SYSTEM
+  // TODO: initialize page_desp
+  uint64 i = NR_PGDESP;
+  while (i-- > 0) {
+    page_desp[i].order = INVALID_ORDER;
+  }
+
+  kmem.free_pages = 0;
+  uint32 order = 0;
+  while (order < MAX_ORDER) {
+    kmem.free_area[order].nr_free = 0;
+    INIT_LIST_HEAD(kmem.free_area[order]);
+  }
+  #endif
   freerange(end, (void*)PHYSTOP);
 }
+
+#ifndef BUDDY_SYSTEM
 
 void
 freerange(void *pa_start, void *pa_end)
@@ -108,24 +135,20 @@ kalloc(void)
 
 #else
 
-void
-kinit()
-{
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
-}
-
+// only used in initialization
 void
 freerange(void *pa_start, void *pa_end)
 {
+  // use __free_page_bulk
   char *p;
-  p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
+    __free_pages_bulk(pa_to_page(p), 0);
+  }
 }
 
+// may should replace kalloc
 void *
-allocrange(uint64 order)
+allocrange(uint32 order)
 {
   acquire(&kmem.lock);
   /* copy linux code here */
@@ -139,21 +162,31 @@ kalloc()
 }
 
 
-static inline uint8 page_is_buddy(struct page *buddy, uint64 order)
+static inline uint8 page_is_buddy(struct page *buddy, uint32 order)
 {
-  return 0; // 0 for false;
+  return buddy->order == order;
 }
 
-/* I may write really really awful code */
-static inline void __free_pages_bulk (struct page *page, struct page *base,
-		struct zone *zone, unsigned int order)
+static inline void rmv_page_order(struct page *page)
+{
+  page->order = INVALID_ORDER;
+}
+
+static inline void set_page_order(struct page *page, uint32 order)
+{
+  page->order = order;
+}
+
+/* add freed page to free_area */
+static inline void __free_pages_bulk (struct page *page, unsigned int order)
 {
 	unsigned long page_idx;
 	struct page *coalesced;
 	int order_size = 1 << order;
 
-	page_idx = (page - base) >> PGSHIFT;
+	page_idx = page - page_desp;
 
+  // I comment this out just because I have not implemented BUG_ON
 	// BUG_ON(page_idx & (order_size - 1));
 	// BUG_ON(bad_range(zone, page));
 
@@ -164,21 +197,21 @@ static inline void __free_pages_bulk (struct page *page, struct page *base,
 		int buddy_idx;
 
 		buddy_idx = (page_idx ^ (1 << order));
-		buddy = (struct page *)((uchar *)base + (buddy_idx << PGSHIFT));
+		buddy = (struct page *)(page_desp + buddy_idx);
 		if (!page_is_buddy(buddy, order))
 			break;
 		/* Move the buddy up one level. */
 		list_del(&buddy->lru);
-		area = kmem.free_areas + order;
+		area = kmem.free_area + order;
 		area->nr_free--;
 		rmv_page_order(buddy);
 		page_idx &= buddy_idx;
 		order++;
 	}
-	coalesced = base + page_idx;
+	coalesced = page_desp + page_idx;
 	set_page_order(coalesced, order);
-	list_add(&coalesced->lru, &kmem.free_areas[order].free_list);
-	kmem.free_areas[order].nr_free++;
+	list_add(&coalesced->lru, &kmem.free_area[order].free_list);
+	kmem.free_area[order].nr_free++;
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -188,7 +221,7 @@ static inline void __free_pages_bulk (struct page *page, struct page *base,
 void
 kfree(void *pa)
 {
-  struct run *r;
+  struct page *pgdsp;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -196,23 +229,26 @@ kfree(void *pa)
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
-  r = (struct run*)pa;
-
   acquire(&kmem.lock);
-  // copy linux code here
-  // r->next = kmem.freelist;
-  // kmem.freelist = r;
+  pgdsp = pa_to_page(pa);
+  __free_pages_bulk(pgdsp, pgdsp->order);
   release(&kmem.lock);
 }
 
-static struct page *__rmqueue(struct zone *zone, unsigned int order)
+static inline struct page *expand(struct page *page, uint32 order, 
+  uint32 current_order, struct area *area) 
+{
+
+}
+
+static struct page *__rmqueue(uint32 order)
 {
 	struct free_area * area;
 	unsigned int current_order;
 	struct page *page;
 
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
-		area = zone->free_area + current_order;
+		area = kmem.free_area + current_order;
 		if (list_empty(&area->free_list))
 			continue;
 
@@ -220,30 +256,11 @@ static struct page *__rmqueue(struct zone *zone, unsigned int order)
 		list_del(&page->lru);
 		rmv_page_order(page);
 		area->nr_free--;
-		zone->free_pages -= 1UL << order;
-		return expand(zone, page, order, current_order, area);
+		kmem.free_pages -= 1UL << order;
+		return expand(page, order, current_order, area);
 	}
 
 	return NULL;
 }
-
-// // Allocate one 4096-byte page of physical memory.
-// // Returns a pointer that the kernel can use.
-// // Returns 0 if the memory cannot be allocated.
-// void *
-// kalloc(void)
-// {
-//   struct run *r;
-//
-//   acquire(&kmem.lock);
-//   r = kmem.freelist;
-//   if(r)
-//     kmem.freelist = r->next;
-//   release(&kmem.lock);
-//
-//   if(r)
-//     memset((char*)r, 5, PGSIZE); // fill with junk
-//   return (void*)r;
-// }
 
 #endif
