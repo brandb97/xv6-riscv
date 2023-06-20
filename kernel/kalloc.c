@@ -24,8 +24,8 @@ extern char end[]; // first address after kernel.
 #define INVALID_ORDER MAX_ORDER
 #define NR_PGDESP ((PHYSTOP - KERNBASE) >> PGSHIFT)
 
-#define pa_to_page(x) (struct page *)(page_desp + ((x - KERNBASE) >> PGSHIFT))
-#define page_to_pa(x) (void *)(KERNBASE + (x - page_desp) << PGSHIFT)
+#define pa_to_page(x) (struct page *)(page_desp + (((uint64)x - KERNBASE) >> PGSHIFT))
+#define page_to_pa(x) (void *)(KERNBASE + ((x - page_desp) << PGSHIFT))
 
 // Page descriptor for all pages in mem
 struct page {
@@ -34,7 +34,7 @@ struct page {
 } page_desp[NR_PGDESP];
 
 struct free_area {
-  struct list *free_list;
+  struct list_head free_list;
   uint64 nr_free;
 };
 
@@ -43,6 +43,9 @@ struct {
   struct free_area free_area[MAX_ORDER];
   uint64 free_pages;
 } kmem;
+
+static inline void __free_pages_bulk (struct page *page, unsigned int order);
+static struct page *__rmqueue(uint32 order);
 
 #else
 
@@ -56,8 +59,6 @@ struct {
 } kmem;
 
 #endif
-
-
 
 void
 kinit()
@@ -74,7 +75,7 @@ kinit()
   uint32 order = 0;
   while (order < MAX_ORDER) {
     kmem.free_area[order].nr_free = 0;
-    INIT_LIST_HEAD(kmem.free_area[order]);
+    INIT_LIST_HEAD(&kmem.free_area[order].free_list);
   }
   #endif
   freerange(end, (void*)PHYSTOP);
@@ -141,6 +142,7 @@ freerange(void *pa_start, void *pa_end)
 {
   // use __free_page_bulk
   char *p;
+  p = (char*)PGROUNDUP((uint64)pa_start);  
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
     __free_pages_bulk(pa_to_page(p), 0);
   }
@@ -150,9 +152,12 @@ freerange(void *pa_start, void *pa_end)
 void *
 allocrange(uint32 order)
 {
+  struct page *pg;
   acquire(&kmem.lock);
   /* copy linux code here */
+  pg = __rmqueue(order);
   release(&kmem.lock);
+  return page_to_pa(pg);
 }
 
 void *
