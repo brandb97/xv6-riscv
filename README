@@ -3,8 +3,8 @@ book `Understand The Linux Kernel` considers) which I consider simple
 and interesting to xv6.
 
 TODO LIST:
-buddy system -> IN_PROGRESS
-slab allocation
+buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
+slab allocation -> IN_PROGRESS
 siganl
 ...
 
