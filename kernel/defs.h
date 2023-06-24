@@ -185,6 +185,16 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
+// slab.c
+void *          kmem_cache_alloc (kmem_cache_t *, int);
+void            kmem_cache_free (kmem_cache_t *, void *);
+int             kmem_cache_destroy (kmem_cache_t *);
+void            kmem_cache_init(void);
+kmem_cache_t *  kmem_cache_create (const char *, size_t, size_t,
+	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
+	void (*)(void*, kmem_cache_t *, unsigned long));
+
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 #define NULL (void *)(0)
