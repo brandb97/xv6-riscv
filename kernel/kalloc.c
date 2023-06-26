@@ -41,8 +41,20 @@ struct {
   uint64 free_pages;
 } kmem;
 
-static inline void __free_pages_bulk (struct page *page, unsigned int order);
-static struct page *__rmqueue(uint32 order);
+static inline uint8 page_is_buddy(struct page *buddy, uint32 order)
+{
+  return buddy->order == order;
+}
+
+static inline void rmv_page_order(struct page *page)
+{
+  page->order = INVALID_ORDER;
+}
+
+static inline void set_page_order(struct page *page, uint32 order)
+{
+  page->order = order;
+}
 
 #else
 
@@ -136,9 +148,48 @@ kalloc(void)
 
 #else
 
+// allocate fns: expand, __rmqueue, alloc_pages
+static inline struct page *expand(struct page *page, uint32 low,
+  uint32 high, struct free_area *area) 
+{
+	unsigned long size = 1 << high;
+
+	while (high > low) {
+		area--;
+		high--;
+		size >>= 1;
+		list_add(&page[size].lru, &area->free_list);
+		area->nr_free++;
+		set_page_order(&page[size], high);
+	}
+	return page;
+}
+
+static struct page *__rmqueue(uint32 order)
+{
+	struct free_area * area;
+	unsigned int current_order;
+	struct page *page;
+
+	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
+		area = kmem.free_area + current_order;
+		if (list_empty(&area->free_list))
+			continue;
+
+		page = list_entry(area->free_list.next, struct page, lru);
+		list_del(&page->lru);
+		rmv_page_order(page);
+		area->nr_free--;
+		kmem.free_pages -= 1UL << order;
+		return expand(page, order, current_order, area);
+	}
+
+	return NULL;
+}
+
 // may should replace kalloc
 void *
-allocrange(uint32 order)
+alloc_pages(uint32 order)
 {
   struct page *pg;
   acquire(&kmem.lock);
@@ -151,23 +202,7 @@ allocrange(uint32 order)
 void *
 kalloc()
 {
-  return allocrange(0);
-}
-
-
-static inline uint8 page_is_buddy(struct page *buddy, uint32 order)
-{
-  return buddy->order == order;
-}
-
-static inline void rmv_page_order(struct page *page)
-{
-  page->order = INVALID_ORDER;
-}
-
-static inline void set_page_order(struct page *page, uint32 order)
-{
-  page->order = order;
+  return alloc_pages(0);
 }
 
 /* add freed page to free_area */
@@ -213,7 +248,7 @@ static inline void __free_pages_bulk (struct page *page, unsigned int order)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+free_pages(void *pa)
 {
   struct page *pgdsp;
   uint32 order;
@@ -234,42 +269,10 @@ kfree(void *pa)
   release(&kmem.lock);
 }
 
-static inline struct page *expand(struct page *page, uint32 low,
-  uint32 high, struct free_area *area) 
+void
+kfree(void *pa)
 {
-	unsigned long size = 1 << high;
-
-	while (high > low) {
-		area--;
-		high--;
-		size >>= 1;
-		list_add(&page[size].lru, &area->free_list);
-		area->nr_free++;
-		set_page_order(&page[size], high);
-	}
-	return page;
-}
-
-static struct page *__rmqueue(uint32 order)
-{
-	struct free_area * area;
-	unsigned int current_order;
-	struct page *page;
-
-	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
-		area = kmem.free_area + current_order;
-		if (list_empty(&area->free_list))
-			continue;
-
-		page = list_entry(area->free_list.next, struct page, lru);
-		list_del(&page->lru);
-		rmv_page_order(page);
-		area->nr_free--;
-		kmem.free_pages -= 1UL << order;
-		return expand(page, order, current_order, area);
-	}
-
-	return NULL;
+  free_pages(pa);
 }
 
 #endif

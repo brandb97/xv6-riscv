@@ -287,6 +287,9 @@ intr_get()
   return (x & SSTATUS_SIE) != 0;
 }
 
+#define intr_save(x) do { x = r_sstatus(); intr_off(); } while(0)
+#define intr_restore(x) do { w_sstatus(x); } while (0)
+
 static inline uint64
 r_sp()
 {

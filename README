@@ -1,9 +1,12 @@
+YOU ARE IN `yld` BRANCH NOW, don't trying to run or even to compile anything.
+
 This is project to add new features from linux kernel 2.6.11 (as the 
 book `Understand The Linux Kernel` considers) which I consider simple 
 and interesting to xv6.
 
 TODO LIST:
 buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
+wait queue -> IN_PROGRESS (wait queue for semaphore, add list_head to struct proc)
 slab allocation -> IN_PROGRESS
 siganl
 ...

@@ -1,3 +1,6 @@
+#ifndef _KERNEL_SLAB_
+#define _KERNEL_SLAB_
+
 typedef struct kmem_cache_s kmem_cache_t;
 
 struct kmem_cache_s {
@@ -83,3 +86,5 @@ struct array_cache {
 	unsigned int batchcount;
 	unsigned int touched;
 };
+
+#endif
