@@ -5,7 +5,7 @@ struct semaphore
 {
     struct spinlock lk;
     int count;
-    struct list_head *wait_queue;
+    struct list_head wait_queue;
 };
 
 #endif
