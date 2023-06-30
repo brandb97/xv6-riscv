@@ -9,6 +9,7 @@
  */
 #define LIST_POISON1  ((void *) 0x00100100)
 #define LIST_POISON2  ((void *) 0x00200200)
+#define prefetch(x) 
 
 /*
  * Simple doubly linked list implementation.
