@@ -58,6 +58,7 @@ down(struct semaphore *semp)
     // for sleep lock, "sleep lock" should be
     // set as macro
     if (streql(semp->name, "sleep lock")) {
+        printf("%d get sleeplock\n", p->pid);
         semp->locked = 1;
         semp->pid = p->pid;
     }
@@ -73,6 +74,7 @@ up(struct semaphore *semp)
     // semp->locked & semp->pid is only used
     // for sleep lock
     if (streql(semp->name, "sleep lock")) {
+        printf("%d release sleeplock\n", semp->pid);
         semp->locked = 0;
         semp->pid = -1;
     }
@@ -89,7 +91,7 @@ add_to_wait_queue(struct list_head *wq)
     struct proc *p = myproc();
     // disable intr? I don't know, fix it later
     // add it
-    printf("pid: %d go to sleep\n", p->pid);
+    // printf("pid: %d go to sleep\n", p->pid);
     list_add(&p->next, wq);
 }
 
@@ -114,7 +116,7 @@ wake_up_queue(struct list_head *wq)
         acquire(&pos->lock);
         if (pos->state == SLEEPING) {
             pos->state = RUNNABLE;
-            printf("wake up pid: %d\n", pos->pid);
+            // printf("wake up pid: %d\n", pos->pid);
             release(&pos->lock);
             break;
         }
