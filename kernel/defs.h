@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct semaphore;
 
 // bio.c
 void            binit(void);
@@ -197,6 +198,12 @@ void            virtio_disk_intr(void);
 // 	void (*)(void*, kmem_cache_t *, unsigned long));
 // void*           kmalloc();
 // void            kmfree(void *);
+
+// semaphore.c
+void               initsemaphore(struct semaphore *, int, char *);
+void               down(struct semaphore *);
+void               up(struct semaphore *);
+
 
 
 // number of elements in fixed-size array
