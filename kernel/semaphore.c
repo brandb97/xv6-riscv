@@ -15,6 +15,8 @@ static void remove_from_wait_queue(struct list_head *);
 static void wake_up_queue(struct list_head *);
 static int streql(char *, char *);
 
+static int semp_seq = 0;
+
 // not going to use linux 2.6.11 implementation
 // which may be add later
 void
@@ -23,17 +25,17 @@ initsemaphore(struct semaphore *semp, int count, char *name)
     semp->count = count;
     semp->locked = 0;
     semp->pid = -1;
+    // SHOULD use macro not "semaphore lock"    
     semp->name = name? name: "semaphore lock";
-    // May be buggy here, check this later
-    // I do think here is just debug use
-    // But let's use macro to fix it
-    initlock(&semp->lk, "semaphore lock");
+    semp->is_sleeplock = streql(semp->name, "sleep lock");
+    initlock(&semp->lk, name);
+    acquire(&semp->lk);
+    semp->seq = semp_seq++;
+    release(&semp->lk);
     // may be buggy here, check this later
     INIT_LIST_HEAD(&semp->wait_queue);
 }
 
-// Only consider wait queue..., so it's buggy!
-// change the state first
 void
 down(struct semaphore *semp)
 {
@@ -42,85 +44,104 @@ down(struct semaphore *semp)
     acquire(&semp->lk);
     semp->count--;
     if (semp->count < 0) {
-        acquire(&p->lock);
-        p->state = SLEEPING;
-        release(&p->lock);
-
+        // printf("%d wait on %d -- %d wait\n", p->pid, semp->seq, -semp->count);
         add_to_wait_queue(&semp->wait_queue);
         acquire(&p->lock);
+        p->state = UNINTERRUPT;
         release(&semp->lk);
         sched();
         acquire(&semp->lk);
+        if (p->chan) {
+            panic("wakeup by the wrong guy");
+        }
         release(&p->lock);
         remove_from_wait_queue(&semp->wait_queue);
     }
-    // semp->locked & semp->pid is only used
-    // for sleep lock, "sleep lock" should be
-    // set as macro
-    if (streql(semp->name, "sleep lock")) {
-        printf("%d get sleeplock\n", p->pid);
+
+    // printf("%d acquired %d semp -- %d wait\n", p->pid, semp->seq, -semp->count);
+    if (semp->is_sleeplock) {
+        if (semp->locked) {
+            printf("%d want to lock %d semp which is already locked by %d\n", 
+                    p->pid, semp->seq, semp->pid);
+            // procdump();
+            panic("sleeplocklock");
+        }
         semp->locked = 1;
         semp->pid = p->pid;
     }
     release(&semp->lk);
 }
 
-// Only consider wait queue..., so it's buggy!
 void
 up(struct semaphore *semp)
 {
     acquire(&semp->lk);
     semp->count++;
-    // semp->locked & semp->pid is only used
-    // for sleep lock
-    if (streql(semp->name, "sleep lock")) {
-        printf("%d release sleeplock\n", semp->pid);
+    if (semp->is_sleeplock) {
         semp->locked = 0;
         semp->pid = -1;
     }
     if (semp->count <= 0) {
         wake_up_queue(&semp->wait_queue);
     }
+    // printf("%d released %d semp\n", myproc()->pid, semp->seq);
     release(&semp->lk);
 }
 
 static void
 add_to_wait_queue(struct list_head *wq)
 {
-    // get current proc
     struct proc *p = myproc();
-    // disable intr? I don't know, fix it later
-    // add it
-    // printf("pid: %d go to sleep\n", p->pid);
     list_add(&p->next, wq);
 }
 
 static void
 remove_from_wait_queue(struct list_head *wq)
 {
-    // get current proc
     struct proc *p = myproc();
-    // remove it
+    struct list_head *pos;
+    int find = 0;
+    list_for_each(pos, wq) {
+       if (pos == &p->next) {
+           find = 1;
+           break;
+       }
+    }
+    if (!find) {
+       panic("remove somthing not from this queue");
+    }
     list_del(&p->next);
 }
 
+
+// scan queue and `wake up` a blocked one
+// wake up means change its state from block to runnable
 static void
 wake_up_queue(struct list_head *wq)
 {
-    // scan queue and `wake up` a blocked one
-    // wake up means change its state from 
-    // block to running
-
     struct proc *pos;
+    // just for debug
+    int nr_runble = 0;
+    int has_wake_up = 0;
     list_for_each_entry(pos, wq, next) {
         acquire(&pos->lock);
-        if (pos->state == SLEEPING) {
+        if (pos->state == UNINTERRUPT && !has_wake_up) {
             pos->state = RUNNABLE;
-            // printf("wake up pid: %d\n", pos->pid);
-            release(&pos->lock);
-            break;
+            has_wake_up = 1;
+            // release(&pos->lock);
+            // break; remove comment after debug
+        }
+        if (pos->state == RUNNABLE) {
+            nr_runble++;
         }
         release(&pos->lock);
+    }
+
+    // the debug info here is only for sleeplock
+    // but since there aren't any other use for
+    // semaphore, I'll check them all
+    if (nr_runble > 1) {
+        panic("nr_runble > 1 in sleeplock wq");
     }
 }
 

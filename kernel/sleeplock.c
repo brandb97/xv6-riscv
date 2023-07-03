@@ -21,12 +21,16 @@ void
 acquiresleep(struct sleeplock *lk)
 {
   down(&lk->semp);
+  // panic(holdingsleep(lk));
+  // printf("%d acquire sleeplock\n", myproc()->pid);
 }
 
 void
 releasesleep(struct sleeplock *lk)
 {
   up(&lk->semp);
+  // panic(!holdingsleep);
+  // printf("%d release sleeplock\n", myproc()->pid);
 }
 
 int
