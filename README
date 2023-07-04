@@ -6,7 +6,7 @@ and interesting to xv6.
 
 TODO LIST:
 buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
-wait queue -> IN_PROGRESS (wait queue for semaphore, add list_head to struct proc)
+wait queue -> finished semaphore.c {TODO: more general code i.e. replace sleep and wakeup}
 slab allocation -> IN_PROGRESS
 siganl
 ...
