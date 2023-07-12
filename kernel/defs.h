@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 struct buf;
 struct context;
 struct file;
@@ -189,15 +191,17 @@ void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
 // slab.c
-// void*           kmem_cache_alloc (kmem_cache_t *, int);
-// void            kmem_cache_free (kmem_cache_t *, void *);
-// int             kmem_cache_destroy (kmem_cache_t *);
-// void            kmem_cache_init(void);
-// kmem_cache_t*   kmem_cache_create (const char *, size_t, size_t,
-// 	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
-// 	void (*)(void*, kmem_cache_t *, unsigned long));
-// void*           kmalloc();
-// void            kmfree(void *);
+void*           kmem_cache_alloc (kmem_cache_t *, int);
+void            kmem_cache_free (kmem_cache_t *, void *);
+int             kmem_cache_destroy (kmem_cache_t *);
+int             kmem_cache_shrink(kmem_cache_t *cachep);
+void            kmem_cache_init(void);
+kmem_cache_t*   kmem_cache_create (const char *, size_t, size_t,
+	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
+	void (*)(void*, kmem_cache_t *, unsigned long));
+void*           kmalloc(int size, int flags);
+void            kmfree(void *);
+
 
 // semaphore.c
 void               initsemaphore(struct semaphore *, int, char *);
@@ -210,7 +214,15 @@ void               up(struct semaphore *);
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 #define NULL (void *)(0)
 
-#include <stddef.h>
 #define container_of(ptr, type, member) ({			\
         const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
         (type *)( (char *)__mptr - offsetof(type,member) );})
+
+typedef unsigned short kmem_bufctl_t;
+
+#define ALIGN(x, a) __ALIGN_MASK(x, ((typeof(x))(a) - 1))
+#define __ALIGN_MASK(x, mask) ((x + mask) & ~(mask))
+
+#define cache_line_size() (1 << 6)
+
+#define NR_CPUS 8

@@ -7,3 +7,4 @@ struct spinlock {
   struct cpu *cpu;   // The cpu holding the lock.
 };
 
+#define SPIN_LOCK_UNLOCKED(n) { .locked = 0, .name = n, .cpu = 0 }

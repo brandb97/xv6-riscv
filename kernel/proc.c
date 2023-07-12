@@ -683,3 +683,41 @@ procdump(void)
     printf("\n");
   }
 }
+
+// wait for other cpu to complete
+int smp_call_function (void (*func) (void *info), void *info, int wait)
+{
+	struct call_data_struct data;
+	int cpus = num_online_cpus()-1;
+
+	if (!cpus)
+		return 0;
+
+	/* Can deadlock when called with interrupts disabled */
+	WARN_ON(irqs_disabled());
+
+	data.func = func;
+	data.info = info;
+	atomic_set(&data.started, 0);
+	data.wait = wait;
+	if (wait)
+		atomic_set(&data.finished, 0);
+
+	spin_lock(&call_lock);
+	call_data = &data;
+	mb();
+	
+	/* Send a message to all other CPUs and wait for them to respond */
+	send_IPI_allbutself(CALL_FUNCTION_VECTOR);
+
+	/* Wait for response */
+	while (atomic_read(&data.started) != cpzus)
+		cpu_relax();
+
+	if (wait)
+		while (atomic_read(&data.finished) != cpus)
+			cpu_relax();
+	spin_unlock(&call_lock);
+
+	return 0;
+}
