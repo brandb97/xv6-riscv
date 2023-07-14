@@ -723,54 +723,54 @@ static void enable_cpucache (kmem_cache_t *cachep)
 
 static int do_tune_cpucache (kmem_cache_t* cachep, int limit, int batchcount, int shared)
 {
-	struct ccupdate_struct new;
-	struct array_cache *new_shared;
-	int i;
+	// struct ccupdate_struct new;
+	// struct array_cache *new_shared;
+	// int i;
 
-	memset(&new.new,0,sizeof(new.new));
-	for (i = 0; i < NR_CPUS; i++) {
-		if (cpu_online(i)) {
-			new.new[i] = alloc_arraycache(i, limit, batchcount);
-			if (!new.new[i]) {
-				for (i--; i >= 0; i--) kfree(new.new[i]);
-				return -1;
-			}
-		} else {
-			new.new[i] = NULL;
-		}
-	}
-	new.cachep = cachep;
+	// memset(&new.new,0,sizeof(new.new));
+	// for (i = 0; i < NR_CPUS; i++) {
+	// 	if (cpu_online(i)) {
+	// 		new.new[i] = alloc_arraycache(i, limit, batchcount);
+	// 		if (!new.new[i]) {
+	// 			for (i--; i >= 0; i--) kfree(new.new[i]);
+	// 			return -1;
+	// 		}
+	// 	} else {
+	// 		new.new[i] = NULL;
+	// 	}
+	// }
+	// new.cachep = cachep;
 
-	smp_call_function_all_cpus(do_ccupdate_local, (void *)&new);
+	// smp_call_function_all_cpus(do_ccupdate_local, (void *)&new);
 	
-	check_irq_on();
-	spin_lock_irq(&cachep->spinlock);
-	cachep->batchcount = batchcount;
-	cachep->limit = limit;
-	cachep->free_limit = (1+num_online_cpus())*cachep->batchcount + cachep->num;
-	spin_unlock_irq(&cachep->spinlock);
+	// check_irq_on();
+	// spin_lock_irq(&cachep->spinlock);
+	// cachep->batchcount = batchcount;
+	// cachep->limit = limit;
+	// cachep->free_limit = (1+num_online_cpus())*cachep->batchcount + cachep->num;
+	// spin_unlock_irq(&cachep->spinlock);
 
-	for (i = 0; i < NR_CPUS; i++) {
-		struct array_cache *ccold = new.new[i];
-		if (!ccold)
-			continue;
-		spin_lock_irq(&cachep->spinlock);
-		free_block(cachep, ac_entry(ccold), ccold->avail);
-		spin_unlock_irq(&cachep->spinlock);
-		kfree(ccold);
-	}
-	new_shared = alloc_arraycache(-1, batchcount*shared, 0xbaadf00d);
-	if (new_shared) {
-		struct array_cache *old;
+	// for (i = 0; i < NR_CPUS; i++) {
+	// 	struct array_cache *ccold = new.new[i];
+	// 	if (!ccold)
+	// 		continue;
+	// 	spin_lock_irq(&cachep->spinlock);
+	// 	free_block(cachep, ac_entry(ccold), ccold->avail);
+	// 	spin_unlock_irq(&cachep->spinlock);
+	// 	kfree(ccold);
+	// }
+	// new_shared = alloc_arraycache(-1, batchcount*shared, 0xbaadf00d);
+	// if (new_shared) {
+	// 	struct array_cache *old;
 
-		spin_lock_irq(&cachep->spinlock);
-		old = cachep->lists.shared;
-		cachep->lists.shared = new_shared;
-		if (old)
-			free_block(cachep, ac_entry(old), old->avail);
-		spin_unlock_irq(&cachep->spinlock);
-		kfree(old);
-	}
+	// 	spin_lock_irq(&cachep->spinlock);
+	// 	old = cachep->lists.shared;
+	// 	cachep->lists.shared = new_shared;
+	// 	if (old)
+	// 		free_block(cachep, ac_entry(old), old->avail);
+	// 	spin_unlock_irq(&cachep->spinlock);
+	// 	kfree(old);
+	// }
 
 	return 0;
 }
