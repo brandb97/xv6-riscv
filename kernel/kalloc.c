@@ -17,6 +17,8 @@ extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
 
+struct page page_desp[];
+
 void
 kinit()
 {

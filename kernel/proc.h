@@ -109,3 +109,17 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+struct call_data_struct {
+  void (*func) (void *);
+  void *info;
+  atomic_t started;
+  atomic_t finished;
+  atomic_t entered;
+  int wait;
+};
+
+extern struct spinlock call_lock;
+extern int call_ready;
+extern struct spinlock call_ready_lock;
+extern struct call_data_struct *call_data;

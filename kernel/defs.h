@@ -11,6 +11,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct semaphore;
+typedef struct kmem_cache_s kmem_cache_t;
 
 // bio.c
 void            binit(void);
@@ -111,6 +112,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+int             smp_call_function (void (*func) (void *info), void *info, int wait)
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -212,7 +214,6 @@ void               up(struct semaphore *);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-#define NULL (void *)(0)
 
 #define container_of(ptr, type, member) ({			\
         const typeof( ((type *)0)->member ) *__mptr = (ptr);	\

@@ -15,6 +15,11 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+struct spinlock call_lock;
+int call_ready = 0;
+struct spinlock call_ready_lock;
+struct call_data_struct *call_data;
+
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -51,6 +56,8 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  initlock(&call_lock, "call_lock");
+  initlock(&call_ready_lock, "call_ready_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -684,40 +691,36 @@ procdump(void)
   }
 }
 
-// wait for other cpu to complete
+// wait for other cpu to complete, and wait is always 1
 int smp_call_function (void (*func) (void *info), void *info, int wait)
 {
 	struct call_data_struct data;
-	int cpus = num_online_cpus()-1;
+	int cpus = NR_CPUS-1;
 
 	if (!cpus)
 		return 0;
 
-	/* Can deadlock when called with interrupts disabled */
-	WARN_ON(irqs_disabled());
-
 	data.func = func;
 	data.info = info;
+  atomic_set(&data.entered, 0);
 	atomic_set(&data.started, 0);
 	data.wait = wait;
 	if (wait)
 		atomic_set(&data.finished, 0);
 
-	spin_lock(&call_lock);
+	acquire(&call_lock);
 	call_data = &data;
-	mb();
 	
-	/* Send a message to all other CPUs and wait for them to respond */
-	send_IPI_allbutself(CALL_FUNCTION_VECTOR);
-
+  acquire(&call_ready_lock);
+  release(&call_ready_lock);
 	/* Wait for response */
-	while (atomic_read(&data.started) != cpzus)
+	while (atomic_read(&data.started) != cpus)
 		cpu_relax();
 
 	if (wait)
 		while (atomic_read(&data.finished) != cpus)
 			cpu_relax();
-	spin_unlock(&call_lock);
+	release(&call_lock);
 
 	return 0;
 }

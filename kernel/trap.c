@@ -166,6 +166,14 @@ clockintr()
   acquire(&tickslock);
   ticks++;
   wakeup(&ticks);
+  acquire(&call_ready_lock);
+  if (call_ready &&
+      !(atomic_read(&call_data->entered) | 1 << cpuid())) {
+    atomic_add(1, &call_data->started);
+    atomic_or(1 << cpuid(), &call_data->entered);
+    call_data->func(call_data->info);
+  }
+  release(&call_ready_lock);
   release(&tickslock);
 }
 
