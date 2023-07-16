@@ -12,6 +12,7 @@
 #include <stdarg.h>
 
 #include "types.h"
+#include "atomic.h"
 #include "param.h"
 #include "spinlock.h"
 #include "semaphore.h"

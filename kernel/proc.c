@@ -1,4 +1,5 @@
 #include "types.h"
+#include "atomic.h"
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
