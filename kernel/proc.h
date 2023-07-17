@@ -108,6 +108,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // preempt
+  int preempt_count;
 };
 
 struct call_data_struct {

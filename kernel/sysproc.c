@@ -90,3 +90,23 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+
+static struct smptest 
+{
+  int tests[NR_CPUS];
+};
+
+static void do_smptest(void *info)
+{
+
+}
+
+uint64
+sys_smptest(void)
+{
+  // if (check_intr_on) {
+  //   panic();
+  // }
+  smp_call_function();
+}

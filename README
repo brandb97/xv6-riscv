@@ -7,10 +7,32 @@ and interesting to xv6.
 TODO LIST:
 buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
 wait queue -> finished semaphore.c {TODO: more general code i.e. replace sleep and wakeup}
+atomic ops -> finished atomic.h {just COPY AND PASTE current linux kernel arch/riscv code}
+smp wait -> IN_TEST {w/o IPI support, just let clock intr handler do this}
+disable preemption -> IN_PROGRESS {TODO: preempt_enable w/o schdule and preempt_disable}
 slab allocation -> IN_PROGRESS
 signal
 NUMA (interesting, yet I'm not interested in implementation)
-...
+
+Notes:
+  How to add a syscall?
+  step 1: In syscall.h, add a macro 'SYS_xxx'
+  step 2: In syscall.c, add a fn declaration 'extern uint64 sys_xxx(void)'
+  step 3: Also in syscall.c, add an entry in syscalls '[SYS_xxx] sys_xxx'
+  step 4: Implement 'sys_xxx' in the according c file
+
+  why smp_function_call need interrupt on?
+    This fn need to grab call_lock, which may grabing by others now. To let others release
+    the lock. In linux, this cpu need to handle the IPI. In xv6, this cpu need the clk
+    intr handler. If we disable intr, neither of this would happen.
+
+  why atmoic_t is 'struct { volatile int; }' and why preempt_enable and disable need
+  barrier?
+    Sometimes we want compiler generate code in order, where we can use 'volatile' or
+    'barrier()'. In atomic_t case, variable access should NEVER be optimized. And in
+    preempt case, only when we enable or disable preemption, we need let the compiler
+    be stupid. So they are different tools to do the same thing.
+```
 
 THE ORIGINAL README FILE IS HERE
 "

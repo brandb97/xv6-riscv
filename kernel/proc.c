@@ -703,7 +703,7 @@ int smp_call_function (void (*func) (void *info), void *info, int wait)
 
 	data.func = func;
 	data.info = info;
-  atomic_set(&data.entered, 0);
+  atomic_set(&data.entered, 1 << cpuid());
 	atomic_set(&data.started, 0);
 	data.wait = wait;
 	if (wait)
