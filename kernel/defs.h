@@ -119,9 +119,11 @@ void            swtch(struct context*, struct context*);
 
 // spinlock.c
 void            acquire(struct spinlock*);
+void            acquire_irq_on(struct spinlock*);
 int             holding(struct spinlock*);
 void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
+void            release_irq_on(struct spinlock*);
 void            push_off(void);
 void            pop_off(void);
 
@@ -225,4 +227,4 @@ typedef unsigned short kmem_bufctl_t;
 
 #define cache_line_size() (1 << 6)
 
-#define NR_CPUS 8
+#define NR_CPUS 3

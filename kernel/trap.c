@@ -169,15 +169,22 @@ clockintr()
   acquire(&tickslock);
   ticks++;
   wakeup(&ticks);
+  release(&tickslock);
+}
+
+void
+handle_smp_function_call()
+{
   acquire(&call_ready_lock);
   if (call_ready &&
-      !(atomic_read(&call_data->entered) | 1 << cpuid())) {
+      !(atomic_read(&call_data->entered) & 1 << cpuid())) {
+    printf("handle smp fn\n");
     atomic_add(1, &call_data->started);
     atomic_or(1 << cpuid(), &call_data->entered);
     call_data->func(call_data->info);
+    atomic_add(1, &call_data->finished);
   }
   release(&call_ready_lock);
-  release(&tickslock);
 }
 
 // check if it's an external interrupt or software interrupt,
@@ -224,6 +231,7 @@ devintr()
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);
 
+    handle_smp_function_call();
     return 2;
   } else {
     return 0;
