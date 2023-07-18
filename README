@@ -20,6 +20,8 @@ Notes:
   step 2: In syscall.c, add a fn declaration 'extern uint64 sys_xxx(void)'
   step 3: Also in syscall.c, add an entry in syscalls '[SYS_xxx] sys_xxx'
   step 4: Implement 'sys_xxx' in the according c file
+  step 5: Add 'entry(xxx)' in usys.pl
+  step 6: Add declaration in user.h
 
   why smp_function_call need interrupt on?
     This fn need to grab call_lock, which may grabing by others now. To let others release
