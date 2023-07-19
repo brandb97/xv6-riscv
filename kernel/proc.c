@@ -513,7 +513,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-   p->state = RUNNABLE;
+  p->state = RUNNABLE;
   sched();
   release(&p->lock);
 }
@@ -699,7 +699,6 @@ int smp_call_function (void (*func) (void *info), void *info, int wait)
 	int cpus = NR_CPUS-1;
 
   check_intr_on();
-  printf("%d, start smp_call_function\n", myproc()->pid);
 	if (!cpus)
 		return 0;
 
@@ -712,26 +711,26 @@ int smp_call_function (void (*func) (void *info), void *info, int wait)
 		atomic_set(&data.finished, 0);
 
 	acquire_irq_on(&call_lock);
-  printf("%d, get lock\n", myproc()->pid);
-	
+  
   acquire(&call_ready_lock);
   call_ready = 1;
   call_data = &data;
   release(&call_ready_lock);
+  
 	/* Wait for response */
 	while (atomic_read(&data.started) != cpus) {
 		cpu_relax();
   }
-  printf("all started\n");
 
 	if (wait)
 		while (atomic_read(&data.finished) != cpus)
 			cpu_relax();
-  printf("all finished\n");
 
   acquire(&call_ready_lock);
   call_ready = 0;
   call_data = (void *)0UL;
+  release(&call_ready_lock);
+
 	release_irq_on(&call_lock);
 
 	return 0;

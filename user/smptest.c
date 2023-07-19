@@ -4,13 +4,13 @@
 int main()
 {
     if (fork() == -1) {
-        while (smptest()) {
+        while (!smptest()) {
             sleep(1);
         }
     } else {
         do {
             sleep(1);
-        } while (smptest());
+        } while (!smptest());
     }
     exit(0);
 }

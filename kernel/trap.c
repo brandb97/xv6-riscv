@@ -178,7 +178,7 @@ handle_smp_function_call()
   acquire(&call_ready_lock);
   if (call_ready &&
       !(atomic_read(&call_data->entered) & 1 << cpuid())) {
-    printf("handle smp fn\n");
+
     atomic_add(1, &call_data->started);
     atomic_or(1 << cpuid(), &call_data->entered);
     call_data->func(call_data->info);
