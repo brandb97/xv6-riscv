@@ -19,6 +19,7 @@ main()
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
+    kmem_cache_init(); // turn on slab
     procinit();      // process table
     trapinit();      // trap vectors
     trapinithart();  // install kernel trap vector
@@ -37,6 +38,7 @@ main()
     __sync_synchronize();
     printf("hart %d starting\n", cpuid());
     kvminithart();    // turn on paging
+    kmem_cache_init_late();  // turn on slab...
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
   }

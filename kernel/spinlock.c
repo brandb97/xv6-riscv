@@ -46,6 +46,8 @@ acquire(struct spinlock *lk)
 void
 acquire_irq_on(struct spinlock *lk)
 {
+  // should add preemption disabled after lock like linux
+
   if(holding(lk))
     panic("acquire");
 
@@ -99,6 +101,8 @@ release(struct spinlock *lk)
 void
 release_irq_on(struct spinlock *lk)
 {
+  // should add preemption enabled after lock like linux
+
   if(!holding(lk))
     panic("release");
 

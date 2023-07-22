@@ -200,7 +200,8 @@ void            kmem_cache_free (kmem_cache_t *, void *);
 int             kmem_cache_destroy (kmem_cache_t *);
 int             kmem_cache_shrink(kmem_cache_t *cachep);
 void            kmem_cache_init(void);
-kmem_cache_t*   kmem_cache_create (const char *, size_t, size_t,
+void            kmem_cache_init_late();
+kmem_cache_t*   kmem_cache_create (char *, size_t, size_t,
 	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
 	void (*)(void*, kmem_cache_t *, unsigned long));
 void*           kmalloc(int size, int flags);

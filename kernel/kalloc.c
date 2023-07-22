@@ -19,6 +19,23 @@ extern char end[]; // first address after kernel.
 
 struct page page_desp[];
 
+#ifdef BUDDY_SYSTEM
+
+struct {
+  struct spinlock lock;
+  struct free_area free_area[MAX_ORDER];
+  uint64 free_pages;
+} kmem;
+
+#else
+
+struct {
+  struct spinlock lock;
+  struct run *freelist;
+} kmem;
+
+#endif
+
 void
 kinit()
 {

@@ -735,3 +735,26 @@ int smp_call_function (void (*func) (void *info), void *info, int wait)
 
 	return 0;
 }
+
+// struct list_head init_call_back_list = LIST_HEAD_INIT(init_call_back_list);
+// struct init_call_back {
+//   struct list_head next;
+//   void (*call_back)();
+// };
+
+// void register_init_callback(void (*call_back)())
+// {
+//   struct init_call_back *icbp = kmalloc(sizeof(struct init_call_back), 0);
+//   if (!icbp)
+//     panic("register_init_callback fail to alloc icbp");
+
+//   list_add(&icbp->next, &init_call_back_list);
+// }
+
+// void callback_init()
+// {
+//   struct init_call_back *icbp;
+//   list_for_each_entry(icbp, &init_call_back_list, next) {
+//     icbp->call_back();
+//   }
+// }
