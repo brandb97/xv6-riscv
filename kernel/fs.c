@@ -10,6 +10,7 @@
 // are in sysfile.c.
 
 #include "types.h"
+#include "atomic.h"
 #include "riscv.h"
 #include "defs.h"
 #include "param.h"

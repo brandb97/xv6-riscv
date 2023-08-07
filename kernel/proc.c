@@ -1,4 +1,5 @@
 #include "types.h"
+#include "atomic.h"
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
@@ -14,6 +15,11 @@ struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
+
+struct spinlock call_lock;
+int call_ready = 0;
+struct spinlock call_ready_lock;
+struct call_data_struct *call_data;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -51,6 +57,8 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  initlock(&call_lock, "call_lock");
+  initlock(&call_ready_lock, "call_ready_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -505,7 +513,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-   p->state = RUNNABLE;
+  p->state = RUNNABLE;
   sched();
   release(&p->lock);
 }
@@ -683,3 +691,70 @@ procdump(void)
     printf("\n");
   }
 }
+
+// wait for other cpu to complete, and wait is always 1
+int smp_call_function (void (*func) (void *info), void *info, int wait)
+{
+	struct call_data_struct data;
+	int cpus = NR_CPUS-1;
+
+  check_intr_on();
+	if (!cpus)
+		return 0;
+
+	data.func = func;
+	data.info = info;
+  atomic_set(&data.entered, 1 << cpuid());
+	atomic_set(&data.started, 0);
+	data.wait = wait;
+	if (wait)
+		atomic_set(&data.finished, 0);
+
+	acquire_irq_on(&call_lock);
+  
+  acquire(&call_ready_lock);
+  call_ready = 1;
+  call_data = &data;
+  release(&call_ready_lock);
+  
+	/* Wait for response */
+	while (atomic_read(&data.started) != cpus) {
+		cpu_relax();
+  }
+
+	if (wait)
+		while (atomic_read(&data.finished) != cpus)
+			cpu_relax();
+
+  acquire(&call_ready_lock);
+  call_ready = 0;
+  call_data = (void *)0UL;
+  release(&call_ready_lock);
+
+	release_irq_on(&call_lock);
+
+	return 0;
+}
+
+// struct list_head init_call_back_list = LIST_HEAD_INIT(init_call_back_list);
+// struct init_call_back {
+//   struct list_head next;
+//   void (*call_back)();
+// };
+
+// void register_init_callback(void (*call_back)())
+// {
+//   struct init_call_back *icbp = kmalloc(sizeof(struct init_call_back), 0);
+//   if (!icbp)
+//     panic("register_init_callback fail to alloc icbp");
+
+//   list_add(&icbp->next, &init_call_back_list);
+// }
+
+// void callback_init()
+// {
+//   struct init_call_back *icbp;
+//   list_for_each_entry(icbp, &init_call_back_list, next) {
+//     icbp->call_back();
+//   }
+// }

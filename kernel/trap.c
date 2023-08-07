@@ -1,4 +1,5 @@
 #include "types.h"
+#include "atomic.h"
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
@@ -77,7 +78,7 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2 && !myproc()->preempt_count)
     yield();
 
   usertrapret();
@@ -151,7 +152,9 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  if(which_dev == 2 && myproc() != 0 
+     && myproc()->state == RUNNING
+     && !myproc()->preempt_count)
     yield();
 
   // the yield() may have caused some traps to occur,
@@ -167,6 +170,21 @@ clockintr()
   ticks++;
   wakeup(&ticks);
   release(&tickslock);
+}
+
+void
+handle_smp_function_call()
+{
+  acquire(&call_ready_lock);
+  if (call_ready &&
+      !(atomic_read(&call_data->entered) & 1 << cpuid())) {
+
+    atomic_add(1, &call_data->started);
+    atomic_or(1 << cpuid(), &call_data->entered);
+    call_data->func(call_data->info);
+    atomic_add(1, &call_data->finished);
+  }
+  release(&call_ready_lock);
 }
 
 // check if it's an external interrupt or software interrupt,
@@ -213,6 +231,7 @@ devintr()
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);
 
+    handle_smp_function_call();
     return 2;
   } else {
     return 0;

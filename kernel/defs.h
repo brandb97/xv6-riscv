@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 struct buf;
 struct context;
 struct file;
@@ -9,6 +11,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct semaphore;
+typedef struct kmem_cache_s kmem_cache_t;
 
 // bio.c
 void            binit(void);
@@ -109,15 +112,18 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+int             smp_call_function(void (*func) (void *info), void *info, int wait);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
 
 // spinlock.c
 void            acquire(struct spinlock*);
+void            acquire_irq_on(struct spinlock*);
 int             holding(struct spinlock*);
 void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
+void            release_irq_on(struct spinlock*);
 void            push_off(void);
 void            pop_off(void);
 
@@ -189,15 +195,18 @@ void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
 // slab.c
-// void*           kmem_cache_alloc (kmem_cache_t *, int);
-// void            kmem_cache_free (kmem_cache_t *, void *);
-// int             kmem_cache_destroy (kmem_cache_t *);
-// void            kmem_cache_init(void);
-// kmem_cache_t*   kmem_cache_create (const char *, size_t, size_t,
-// 	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
-// 	void (*)(void*, kmem_cache_t *, unsigned long));
-// void*           kmalloc();
-// void            kmfree(void *);
+void*           kmem_cache_alloc (kmem_cache_t *, int);
+void            kmem_cache_free (kmem_cache_t *, void *);
+int             kmem_cache_destroy (kmem_cache_t *);
+int             kmem_cache_shrink(kmem_cache_t *cachep);
+void            kmem_cache_init(void);
+void            kmem_cache_init_late();
+kmem_cache_t*   kmem_cache_create (char *, size_t, size_t,
+	unsigned long, void (*)(void*, kmem_cache_t *, unsigned long),
+	void (*)(void*, kmem_cache_t *, unsigned long));
+void*           kmalloc(int size, int flags);
+void            kmfree(void *);
+
 
 // semaphore.c
 void               initsemaphore(struct semaphore *, int, char *);
@@ -205,12 +214,18 @@ void               down(struct semaphore *);
 void               up(struct semaphore *);
 
 
-
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-#define NULL (void *)(0)
 
-#include <stddef.h>
 #define container_of(ptr, type, member) ({			\
         const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
         (type *)( (char *)__mptr - offsetof(type,member) );})
+
+typedef unsigned short kmem_bufctl_t;
+
+#define ALIGN(x, a) __ALIGN_MASK(x, ((typeof(x))(a) - 1))
+#define __ALIGN_MASK(x, mask) ((x + mask) & ~(mask))
+
+#define cache_line_size() (1 << 6)
+
+#define NR_CPUS 3

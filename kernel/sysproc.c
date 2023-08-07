@@ -1,4 +1,6 @@
 #include "types.h"
+#include "preempt.h"
+#include "atomic.h"
 #include "riscv.h"
 #include "defs.h"
 #include "param.h"
@@ -88,4 +90,52 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+
+struct smptest 
+{
+  int tests[NR_CPUS];
+  int samples[NR_CPUS];
+};
+
+static void do_smptest(void *info)
+{
+  // intr is off
+  struct smptest *st = info;
+  st->tests[cpuid()] +=  st->samples[cpuid()];
+}
+
+uint64
+sys_smptest(void)
+{
+  // if (check_intr_on) {
+  //   panic();
+  // }
+  struct smptest st;
+  int i;
+
+  for (i = 0; i < NR_CPUS; i++) {
+    st.tests[i] = 0;
+    st.samples[i] = i;
+  }
+
+	preempt_disable();
+
+	intr_off();
+	do_smptest(&st);
+	intr_on();
+
+	if (smp_call_function(do_smptest, &st, 1))
+		panic("smptest falied");
+
+	preempt_enable();
+
+  for (i = 0; i < NR_CPUS; i++) {
+    if (st.tests[i] != st.samples[i]) {
+      return -1;
+    }
+  }
+  printf("smptest pass.");
+  return 0;
 }

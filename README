@@ -1,5 +1,3 @@
-YOU ARE IN `slab` BRANCH NOW, don't trying to run or even to compile anything.
-
 This is project to add new features from linux kernel 2.6.11 (as the 
 book `Understand The Linux Kernel` considers) which I consider simple 
 and interesting to xv6.
@@ -7,9 +5,52 @@ and interesting to xv6.
 TODO LIST:
 buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
 wait queue -> finished semaphore.c {TODO: more general code i.e. replace sleep and wakeup}
-slab allocation -> IN_PROGRESS
-signal
-...
+atomic ops -> finished atomic.h {just COPY AND PASTE current linux kernel arch/riscv code}
+smp wait -> finished... really slow {w/o IPI support, just let clock intr handler do this}
+disable preemption -> finished preempt.h proc.h {TODO: preempt_enable w/o schdule and preempt_disable}
+slab allocation -> finished in slab.c/h, but init memory won't be freed
+rcu -> useless maybe
+deferrable func -> useless maybe
+signal -> REALLY INTERESTING
+vm area and cow -> REALLY INTERESTING
+better schedule policy -> REALLY INTERESTING
+kernel thread -> REALLY INTERESTING
+NUMA (interesting, yet I'm not interested in implementation)
+
+Notes:
+  How to add a syscall?
+    step 1: In syscall.h, add a macro 'SYS_xxx'
+    step 2: In syscall.c, add a fn declaration 'extern uint64 sys_xxx(void)'
+    step 3: Also in syscall.c, add an entry in syscalls '[SYS_xxx] sys_xxx'
+    step 4: Implement 'sys_xxx' in the according c file
+    step 5: Add 'entry(xxx)' in usys.pl
+    step 6: Add declaration in user.h
+
+  why smp_function_call need interrupt on?
+    This fn need to grab call_lock, which may grabing by others now. To let others release
+    the lock. In linux, this cpu need to handle the IPI. In xv6, this cpu need the clk
+    intr handler. If we disable intr, neither of this would happen.
+
+  why atmoic_t is 'struct { volatile int; }' and why preempt_enable and disable need
+  barrier?
+    Sometimes we want compiler generate code in order, where we can use 'volatile' or
+    'barrier()'. In atomic_t case, variable access should NEVER be optimized. And in
+    preempt case, only when we enable or disable preemption, we need let the compiler
+    be stupid. So they are different tools to do the same thing.
+
+  Is that worthy to add more hardware support in xv6?
+    Personally, no. What this project intended is only software tricks to make the
+    kernel run faster. Although some hardware mechanism like DMA and IPI also speed
+    kernel up, reading hardware documentation is way more complex and confusing to
+    me than algorithm and data structure. It's fine to learn driver code, but never
+    writting driver now or wasting time and lots of frustration.
+
+  What does call-back func means, why we want delay the execution?
+    call-back means kernel won't call it now, the reason here is we can't assure
+    calling it is safe.
+    delay execution is used because we don't won't allocate superfluous mem (like
+    COW), we have to wait (like RCU, cpu_notifier), we want interrupt handler
+    respond as fast as possible (like softirq tasklet)
 
 THE ORIGINAL README FILE IS HERE
 "
