@@ -8,7 +8,7 @@ TODO LIST:
 buddy system -> finished kalloc.c {TODO: replace kalloc & kfree in other files}
 wait queue -> finished semaphore.c {TODO: more general code i.e. replace sleep and wakeup}
 slab allocation -> IN_PROGRESS
-siganl
+signal
 ...
 
 THE ORIGINAL README FILE IS HERE
