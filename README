@@ -9,12 +9,12 @@ atomic ops -> finished atomic.h {just COPY AND PASTE current linux kernel arch/r
 smp wait -> finished... really slow {w/o IPI support, just let clock intr handler do this}
 disable preemption -> finished preempt.h proc.h {TODO: preempt_enable w/o schdule and preempt_disable}
 slab allocation -> finished in slab.c/h, but init memory won't be freed
+kernel thread -> finished in proc.c/h
 rcu -> useless maybe
 deferrable func -> useless maybe
 signal -> REALLY INTERESTING
 vm area and cow -> REALLY INTERESTING
 better schedule policy -> REALLY INTERESTING
-kernel thread -> REALLY INTERESTING
 NUMA (interesting, yet I'm not interested in implementation)
 
 Notes:
