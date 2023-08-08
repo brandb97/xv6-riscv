@@ -91,6 +91,9 @@ void            printfinit(void);
 int             cpuid(void);
 void            exit(int);
 int             fork(void);
+int             kthread_create(char *, void (*func)(void));
+void            kthread_wakeup(char *);
+void            kthread_destory(char *);
 int             growproc(int);
 void            proc_mapstacks(pagetable_t);
 pagetable_t     proc_pagetable(struct proc *);
@@ -140,6 +143,7 @@ void*           memset(void*, int, uint);
 char*           safestrcpy(char*, const char*, int);
 int             strlen(const char*);
 int             strncmp(const char*, const char*, uint);
+int             strcmp(const char *, const char *);
 char*           strncpy(char*, const char*, int);
 
 // syscall.c

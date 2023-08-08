@@ -4,12 +4,16 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "list.h"
 #include "proc.h"
 #include "defs.h"
 
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+
+struct spinlock kthread_lock;
+struct list_head kthread_list;
 
 struct proc *initproc;
 
@@ -23,6 +27,9 @@ struct call_data_struct *call_data;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
+static struct proc *allockthread();
+static void freekthread(struct proc *p);
+static void ktest();
 
 extern char trampoline[]; // trampoline.S
 
@@ -59,12 +66,18 @@ procinit(void)
   initlock(&wait_lock, "wait_lock");
   initlock(&call_lock, "call_lock");
   initlock(&call_ready_lock, "call_ready_lock");
+  initlock(&kthread_lock, "kthread_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
       INIT_LIST_HEAD(&p->next);
   }
+  INIT_LIST_HEAD(&kthread_list);
+
+  // just for debug
+  kthread_create("ktestd", ktest);
+  kthread_wakeup("ktestd");
 }
 
 // Must be called with interrupts disabled,
@@ -117,6 +130,7 @@ allocpid()
 // If there are no free procs, or a memory allocation fails, return 0.
 static struct proc*
 allocproc(void)
+
 {
   struct proc *p;
 
@@ -178,6 +192,40 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+}
+
+
+/* What DOSE `allocproc` DO?
+ *   step 1.
+ *   step 2.
+ * 
+ * What DOSE `freeproc` DO?
+ */
+static struct proc *
+allockthread()
+{
+  struct proc *p;
+
+  // printf("enter allockthread\n");
+  if((p = kmalloc(sizeof(struct proc), 0)) == 0) {
+    return 0;
+  }
+
+  initlock(&p->lock, "proc");
+  p->pid = allocpid();
+  p->state = USED;
+
+  p->kstack = (uint64)kalloc();
+
+  // printf("leave allockthread\n");
+  return p;
+}
+
+static void
+freekthread(struct proc *p)
+{
+  kfree((void *)p->kstack);
+  kmfree(p);
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -331,7 +379,136 @@ fork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
+  // just for fun
+  kthread_wakeup("ktestd");
   return pid;
+}
+
+void
+ktest()
+{
+  struct proc *p;
+
+  p = myproc();
+  release(&p->lock);
+  for(;;) {
+    printf("ktestd scheduled\n");
+    acquire(&p->lock);
+    p->state = SLEEPING;
+    sched();
+    if (p->killed) {
+      release(&p->lock);
+      freekthread(p);
+      break;
+    }
+    release(&p->lock);
+  }
+}
+
+/* WHAT `fork` DO?
+ *   alloc proc desp
+ *   copy user memory from parent to child
+ *   copy saved user register in trapframe
+ *   for child a0 = 0
+ *   file and current word directory duplicate
+ *   copy proc name, parent
+ *   modify state
+ * 
+ * WHAT `exec` DO?
+ *   find executable file
+ *   alloc a pagetable
+ *   uvmalloc using the pagetable
+ *   allocate a stack [2 * PGSIZE]
+ *   put args and argv in stack
+ *   set proc name
+ *   set proc pgtable, entry, init stack
+ *   free old pgtable
+ */
+int
+kthread_create(char *name, void(*func)(void))
+{
+  struct proc *np;
+  
+  // printf("entry kthread_create\n");
+  // alloc proc desp
+  if((np = allockthread()) == 0){
+    return -1;
+  }
+
+  // no need to copy pgtable and memory
+  // push arg???
+
+  safestrcpy(np->name, name, sizeof(name));
+  // fill context with kstack and func
+  np->context.ra = (uint64)func;
+  np->context.sp = np->kstack + PGSIZE;
+
+  // add to kthread list
+  acquire(&kthread_lock);
+  acquire(&np->lock);
+  list_add(&np->next, &kthread_list);
+  release(&np->lock);  
+  release(&kthread_lock);
+
+  // printf("leave kthread_create\n");
+  return np->pid;
+}
+
+// use name to wakeup a thread
+// may should use pid???
+void
+kthread_wakeup(char *name)
+{
+  struct proc *pos;
+  struct spinlock *prev_lk;
+
+  prev_lk = &kthread_lock;
+  acquire(&kthread_lock);
+  list_for_each_entry(pos, &kthread_list, next) {
+    acquire(&pos->lock);
+    release(prev_lk);
+    prev_lk = &pos->lock;
+    if (strcmp(pos->name, name) == 0) {
+      pos->state = RUNNABLE;
+      release(&pos->lock);
+      return;
+    }
+  }
+
+  release(prev_lk);
+  return;
+}
+
+void
+kthread_destory(char *name)
+{
+  struct proc *pos;
+  struct proc *p = NULL;
+  struct spinlock *prev_lk, *lk;
+
+  prev_lk = NULL;
+  lk = &kthread_lock;
+  acquire(&kthread_lock);
+  list_for_each_entry(pos, &kthread_list, next) {
+    acquire(&pos->lock);
+    lk = &pos->lock;
+    if (strcmp(name, pos->name) == 0) {
+      p = pos;
+      break;
+    }
+    if (!prev_lk)
+      release(prev_lk);
+    prev_lk = lk;
+  }
+
+  if (p != NULL) {
+    p->killed = 1;
+    p->state = RUNNABLE;
+    list_del(&p->next);
+    release(prev_lk);
+  }
+
+  release(lk);
 }
 
 // Pass p's abandoned children to init.
@@ -477,6 +654,31 @@ scheduler(void)
       }
       release(&p->lock);
     }
+
+    // add new loop for kernel thread
+    // this code is rebudunt, try to remove it
+    struct spinlock *lk;
+
+    lk = &kthread_lock;
+    acquire(&kthread_lock);
+    list_for_each_entry(p, &kthread_list, next) {
+      acquire(&p->lock);
+      release(lk);
+      lk = &p->lock;
+      if(p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+    }
+    release(lk);
   }
 }
 
