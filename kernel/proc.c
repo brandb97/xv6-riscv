@@ -214,6 +214,7 @@ allockthread()
   initlock(&p->lock, "proc");
   p->pid = allocpid();
   p->state = USED;
+  p->killed = 0;
 
   p->kstack = (uint64)kalloc();
 
@@ -380,7 +381,7 @@ fork(void)
   release(&np->lock);
 
   // just for fun
-  kthread_wakeup("ktestd");
+  kthread_destory("ktestd");
   return pid;
 }
 
@@ -491,14 +492,13 @@ kthread_destory(char *name)
   acquire(&kthread_lock);
   list_for_each_entry(pos, &kthread_list, next) {
     acquire(&pos->lock);
+    prev_lk = lk;
     lk = &pos->lock;
     if (strcmp(name, pos->name) == 0) {
       p = pos;
       break;
     }
-    if (!prev_lk)
-      release(prev_lk);
-    prev_lk = lk;
+    release(prev_lk);
   }
 
   if (p != NULL) {
